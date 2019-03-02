@@ -40,6 +40,12 @@ public class Pager {
             throw new IllegalArgumentException(message);
         }
 
+        if (pageable.getPageNumber() < 0) {
+            String message = "Page Number must be non-negative!";
+            log.error(message);
+            throw new IllegalArgumentException(message);
+        }
+
         //TODO: What are some other error cases we should handle?
 
         // Here's some initial help to get the ball rolling. We're going to perform the queries against the two
