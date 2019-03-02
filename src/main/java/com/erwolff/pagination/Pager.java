@@ -1,6 +1,7 @@
 package com.erwolff.pagination;
 
 import java.util.function.Function;
+import java.util.stream.StreamSupport;
 
 import com.google.common.collect.Iterators;
 import org.slf4j.Logger;
@@ -20,14 +21,18 @@ public class Pager {
     /**
      * Performs pagination over the two collections using the supplied queries and mapping the results to the specified RESULT object
      *
-     * @param liveQuery - the query against the live collection
-     * @param archivedQuery - the query against the archived collection
-     * @param liveMappingFunction - the function which maps live collection results to the RESULT object
+     * @param liveQuery               - the query against the live collection
+     * @param archivedQuery           - the query against the archived collection
+     * @param liveMappingFunction     - the function which maps live collection results to the RESULT object
      * @param archivedMappingFunction - the function which maps archived collection results to the RESULT object
-     * @param pageable - the page request
+     * @param pageable                - the page request
      * @return - an org.springframework.data.Page of type RESULT
      */
-    public <LIVE, ARCHIVED, RESULT> Page<RESULT> pageAndMerge(Function<Pageable, Page<LIVE>> liveQuery, Function<LIVE, RESULT> liveMappingFunction, Function<Pageable, Page<ARCHIVED>> archivedQuery, Function<ARCHIVED, RESULT> archivedMappingFunction, Pageable pageable) {
+    public <LIVE, ARCHIVED, RESULT> Page<RESULT> pageAndMerge(Function<Pageable, Page<LIVE>> liveQuery,
+                                                              Function<LIVE, RESULT> liveMappingFunction,
+                                                              Function<Pageable, Page<ARCHIVED>> archivedQuery,
+                                                              Function<ARCHIVED, RESULT> archivedMappingFunction,
+                                                              Pageable pageable) {
         if (pageable.getPageSize() <= 0) {
             String message = "Page size must be greater than 0";
             log.error(message);
@@ -70,24 +75,30 @@ public class Pager {
 
     /**
      * Performs pagination over the two collections using the supplied queries and mapping the results to the specified RESULT object
-     *
+     * <p>
      * Reference the README.md for example output of this function
      *
-     * @param initialResults - the results from the first query performed based on the supplied sort (ASC: initial = archived, DESC: initial = live)
-     * @param initialMappingFunction = the function which maps the first query results to the RESULT object
-     * @param secondaryResults - the results from the second query performed based on the supplied sort (ASC: secondary = live, DESC: secondary = archived)
-     * @param secondaryQuery - the query to perform to retrieve secondary results based on the supplied sort (ASC: live query, DESC: archived query)
+     * @param initialResults           - the results from the first query performed based on the supplied sort (ASC: initial = archived, DESC: initial = live)
+     * @param initialMappingFunction   = the function which maps the first query results to the RESULT object
+     * @param secondaryResults         - the results from the second query performed based on the supplied sort (ASC: secondary = live, DESC: secondary = archived)
+     * @param secondaryQuery           - the query to perform to retrieve secondary results based on the supplied sort (ASC: live query, DESC: archived query)
      * @param secondaryMappingFunction - the function which maps the second query results to the RESULT object
-     * @param totalElements - the combined total number of elements from both queries
-     * @param pageable - the page request
-     * @param sort - the sort field and direction
+     * @param totalElements            - the combined total number of elements from both queries
+     * @param pageable                 - the page request
+     * @param sort                     - the sort field and direction
      * @return - an org.springframework.data.Page of type RESULT
      */
-    private <RESULT, INITIAL, SECONDARY> Page<RESULT> pageAndMerge(Page<INITIAL> initialResults, Function<INITIAL, RESULT> initialMappingFunction, Page<SECONDARY> secondaryResults,
-                                                                          Function<Pageable, Page<SECONDARY>> secondaryQuery, Function<SECONDARY, RESULT> secondaryMappingFunction,
-                                                                          long totalElements, Pageable pageable, Sort.Order sort) {
+    private <RESULT, INITIAL, SECONDARY> Page<RESULT> pageAndMerge(Page<INITIAL> initialResults,
+                                                                   Function<INITIAL, RESULT> initialMappingFunction,
+                                                                   Page<SECONDARY> secondaryResults,
+                                                                   Function<Pageable, Page<SECONDARY>> secondaryQuery,
+                                                                   Function<SECONDARY, RESULT> secondaryMappingFunction,
+                                                                   long totalElements,
+                                                                   Pageable pageable,
+                                                                   Sort.Order sort) {
         // check if the initialResults page is already full
         if (isFullPage(initialResults)) {
+            StreamSupport.stream(initialResults.spliterator(), false).map(initialMappingFunction)
             // TODO: initial results contained a full page, what should we do?
             return null;
         }
@@ -105,11 +116,14 @@ public class Pager {
 
     /**
      * Determines whether the supplied Page has a full set of results
+     *
      * @param page - the supplied page
      * @return true IFF the supplied page has a full set of results
      */
     private boolean isFullPage(Page<?> page) {
-        //TODO: write this logic - consider page.hasContent(), page.getSize(), page.getNumberOfElements()
-        return true;
+        // COMPLETED HINT: write this logic - consider page.hasContent(), page.getSize(), page.getNumberOfElements()
+        // case of size = 0 is illegal and will not happen, so page size is > 0
+        // ensure page has content & the size is equivalent to the number of elements.
+        return page.hasContent() && (page.getSize() == page.getNumberOfElements());
     }
 }
