@@ -3,7 +3,7 @@ package com.erwolff.data;
 /**
  * Simple class representing an "ongoing" drive
  */
-public class LiveDrive {
+public class LiveDrive extends Timestamped {
 
     private DriveType type;
     private long timestamp;
@@ -21,6 +21,7 @@ public class LiveDrive {
         this.timestamp = timestamp;
     }
 
+    @Override
     public long getTimestamp() {
         return timestamp;
     }
