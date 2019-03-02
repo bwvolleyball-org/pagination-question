@@ -10,10 +10,13 @@ import java.util.stream.StreamSupport;
 
 import com.erwolff.data.Timestamped;
 import com.google.common.collect.Iterators;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.collections4.ListUtils;
 import org.apache.commons.collections4.comparators.ComparatorChain;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.*;
+import org.springframework.util.Assert;
 
 /**
  * Provides helper utilities for paging results from the DB
@@ -109,26 +112,16 @@ public class Pager {
                                                                    long totalElements,
                                                                    Pageable pageable,
                                                                    Sort.Order sort) {
-        // check if the initialResults page is already full
-        if (isFullPage(initialResults)) {
-            // apply the conversion and return a new page with the results.
+        // if we only have results of one type, we can short circuit and return a binary result(page of one type)
+        if(secondaryResults.getTotalElements() == 0){
             return binaryResult(initialResults, initialMappingFunction, pageable, totalElements, sort);
-            // COMPLETED HINT: initial results contained a full page, what should we do?
         }
-
-        // COMPLETED HINT: check if all total results reside in the secondary collection - then we can short-circuit and return the results immediately
         // if the initial results have no elements, everything is in the secondary results.
-        if (initialResults.getNumberOfElements() == 0){
+        if (initialResults.getTotalElements() == 0){
             return binaryResult(secondaryResults, secondaryMappingFunction, pageable, totalElements, sort);
         }
-
-        //TODO: The rest is up to you! Some things to consider:
-        // Remember, we have the FULL results of the query from both collections - we need to whittle down those results to the correct results to be returned.
-        // Maybe keep track of total size vs the remaining size needed to fill out the results page.
-        // Consider a cursor or an offset calculation.
-        // Remember to apply the mapping functions!
-
-        return null;
+        // results are not of one type exclusively, so we'll need to merge as we go.
+        return dualResult(initialResults, initialMappingFunction, secondaryResults, secondaryMappingFunction, secondaryQuery, pageable, totalElements, sort);
     }
 
     /**
@@ -174,13 +167,91 @@ public class Pager {
         return StreamSupport.stream(page.spliterator(), false);
     }
 
+    /**
+     * A short circuit helper function that will convert results of one type to the final paged results.
+     *
+     * @param anyResults any initial starting type
+     * @param mappingFunction a mapping function to transform from initial type to result type
+     * @param pageable the original pageable - we don't need to modify since it's calculations are correct for results of one starting type
+     * @param numberOfItems the total number of items (which are all of one type).
+     * @param sort the sort declaration
+     * @param <ANY> any original type
+     * @param <RESULT> the final result type
+     * @return a transformed page of results.
+     */
     private <ANY extends Timestamped,RESULT> Page<RESULT> binaryResult(Page<ANY> anyResults, Function<ANY, RESULT> mappingFunction, Pageable pageable, long numberOfItems, Sort.Order sort){
         Comparator<ANY> comparator = comparator(sort);
             return streamOf(anyResults).sorted(comparator).map(mappingFunction).collect(toPage(pageable, numberOfItems));
     }
 
+    /**
+     * A helper function that handles the merging of paging objects when we have results of multiple types.
+     *
+     * We only need to re-query the secondary objects when we've reached them and are trying to merge them into the final paging object.
+     *
+     * @param initialResults the initial objects
+     * @param initialMappingFunction a mapping function to translate from initial to result
+     * @param secondaryResults the secondary objects
+     * @param secondaryMappingFunction a mapping function to translate from secondary to result
+     * @param secondaryQuery a query that can return the secondary objects again from any starting point.
+     * @param pageable the pageable object which tells us where we are at
+     * @param numberOfItems the number of total items
+     * @param sort the sort
+     * @param <INITIAL> the first starting type
+     * @param <SECONDARY> the second starting type
+     * @param <RESULT> the final mapped result type
+     * @return a page of the result type
+     */
+    private <INITIAL extends Timestamped, SECONDARY extends Timestamped, RESULT> Page<RESULT> dualResult(Page<INITIAL> initialResults,
+                                                                                                         Function<INITIAL, RESULT> initialMappingFunction,
+                                                                                                         Page<SECONDARY> secondaryResults,
+                                                                                                         Function<SECONDARY, RESULT> secondaryMappingFunction,
+                                                                                                         Function<Pageable, Page<SECONDARY>> secondaryQuery,
+                                                                                                         Pageable pageable,
+                                                                                                         long numberOfItems,
+                                                                                                         Sort.Order sort){
+        Comparator<Timestamped> comparator = comparator(sort);
+        int pageSize = pageable.getPageSize();
+        if(isFullPage(initialResults)){
+            Pageable mergedPageable = new PageRequest(pageable.getPageNumber(), pageSize, sort.getDirection(), DEFAULT_SORT_FIELD);
+            return streamOf(initialResults).limit(pageable.getPageSize()).sorted(comparator).map(initialMappingFunction).collect(toPage(mergedPageable, numberOfItems));
+        } else if (initialResults.getNumberOfElements() != 0){
+            Pageable mergedPageable = new PageRequest(pageable.getPageNumber(), pageSize, sort.getDirection(), DEFAULT_SORT_FIELD);
+            int initialElements = initialResults.getNumberOfElements();
+            int secondaryElements = pageable.getPageSize() - initialElements;
+
+            Page<SECONDARY> newSecondary = secondaryQuery.apply(pageable.first());
+
+            Stream<RESULT> resultInitial = streamOf(initialResults).sorted(comparator).map(initialMappingFunction);
+            Stream<RESULT> resultSecondary = streamOf(newSecondary).limit(secondaryElements).sorted(comparator).map(secondaryMappingFunction);
+            return concatStreamsToPage(resultInitial, resultSecondary, mergedPageable, numberOfItems);
+        } else {
+            Page<SECONDARY> newSecondary = secondaryQuery.apply(pageable.first());
+
+            long offset = (initialResults.getTotalElements() % pageSize) * (secondaryResults.getTotalPages() - 1);
+
+            int page = pageable.getPageNumber() + initialResults.getNumberOfElements() / initialResults.getTotalPages();
+            Pageable mergedPageable = new PageRequest(page, pageSize, sort.getDirection(), DEFAULT_SORT_FIELD);
+            return streamOf(newSecondary).skip(offset).limit(pageSize).sorted(comparator).map(secondaryMappingFunction).collect(toPage(mergedPageable, numberOfItems));
+        }
+    }
+
     private <ANY extends Timestamped> Comparator<ANY> comparator(Sort.Order sort){
         Comparator<ANY> comparator = Comparator.comparingLong(Timestamped::getTimestamp);
         return new ComparatorChain<>(comparator, sort.isAscending());
+    }
+
+    /**
+     * A helper function that can concatenate streams to a final merged stream, collected into a page.
+     *
+     * @param first the first stream
+     * @param second the second stream
+     * @param pageable the pageable which keeps track of our place
+     * @param numberOfItems the total number of items
+     * @param <RESULT> the result type
+     * @return the page of merged / concatenated results.
+     */
+    private <RESULT> Page<RESULT> concatStreamsToPage(Stream<RESULT> first, Stream<RESULT> second, Pageable pageable, long numberOfItems){
+        return Stream.concat(first, second).collect(toPage(pageable, numberOfItems));
     }
 }
