@@ -69,3 +69,19 @@ _Note: This last page isn't a full page, but we ran out of results so that's fin
 1. Complete the `Pager` class
 2. Verify that all tests pass in the `PagerTest` class (without altering the tests)
 3. Enjoy :)
+
+## Pit Mutation Testing
+
+If you are curious to see the strength of the solution, and which lines are adequately covered by the tests,
+you can use mutation testing to achieve this.
+For an explanation of what mutation testing is, head to [Pitest's official website](http://pitest.org/)!
+
+To run mutation testing against the Pager test, simply run
+
+`mvn org.pitest:pitest-maven:mutationCoverage`
+
+and then open [the report](./target/pit-reports/index.html) in your favorite browser!
+
+Note, due to classpath errors, this project uses `v1.2.5` of the maven pitest plugin, however the latest version is `v1.4.5`.
+`v1.3.x` & `v1.4.x` are seemingly incompatible with maven `v3.6.x`, so to experiment with higher versions of pitest, 
+the maven wrapper could assist with versioning down maven.
