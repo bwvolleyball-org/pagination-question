@@ -3,7 +3,7 @@ package com.erwolff.data;
 /**
  * Simple class representing a drive that has ended and been archived
  */
-public class ArchivedDrive extends Timestamped {
+public class ArchivedDrive {
 
     private DriveType type;
     private long timestamp;
@@ -21,7 +21,6 @@ public class ArchivedDrive extends Timestamped {
         this.timestamp = timestamp;
     }
 
-    @Override
     public long getTimestamp() {
         return timestamp;
     }
