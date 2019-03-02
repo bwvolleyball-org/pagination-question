@@ -1,21 +1,17 @@
 package com.erwolff.pagination;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.function.BiConsumer;
-import java.util.function.BinaryOperator;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collector;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import com.google.common.collect.Iterators;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.*;
-
-import static java.util.stream.Collectors.toList;
 
 /**
  * Provides helper utilities for paging results from the DB
@@ -49,13 +45,13 @@ public class Pager {
             throw new IllegalArgumentException(message);
         }
 
+        // COMPLETED HINT: What are some other error cases we should handle?
         if (pageable.getPageNumber() < 0) {
             String message = "Page Number must be non-negative!";
             log.error(message);
             throw new IllegalArgumentException(message);
         }
 
-        //TODO: What are some other error cases we should handle?
 
         // Here's some initial help to get the ball rolling. We're going to perform the queries against the two
         // collections, then we'll calculate the total elements that were returned, determine the sort that was supplied,
@@ -114,14 +110,20 @@ public class Pager {
         // check if the initialResults page is already full
         if (isFullPage(initialResults)) {
             // apply the conversion and return a new page with the results.
-            return StreamSupport.stream(initialResults.spliterator(), false)
+            return streamOf(initialResults)
                     .map(initialMappingFunction)
-                    .collect(toPage());
+                    .collect(toPage(pageable, totalElements));
             // COMPLETED HINT: initial results contained a full page, what should we do?
         }
 
-        // TODO: check if all total results reside in the secondary collection - then we can short-circuit and return the results immediately
-
+        // COMPLETED HINT: check if all total results reside in the secondary collection - then we can short-circuit and return the results immediately
+        // if the initial results have no elements, everything is in the secondary results.
+        if (initialResults.getNumberOfElements() == 0){
+            return streamOf(secondaryResults)
+                    .map(secondaryMappingFunction)
+                    .collect(toPage(pageable, totalElements));
+        }
+        
         //TODO: The rest is up to you! Some things to consider:
         // Remember, we have the FULL results of the query from both collections - we need to whittle down those results to the correct results to be returned.
         // Maybe keep track of total size vs the remaining size needed to fill out the results page.
@@ -148,7 +150,7 @@ public class Pager {
      * @param <RESULT> a generic type, can be anything, intended to be used on 'RESULT' types.
      * @return a {@link Page<RESULT>} from the stream termination.
      */
-    private <RESULT> Collector<RESULT, List<RESULT>, Page<RESULT>> toPage() {
+    private <RESULT> Collector<RESULT, List<RESULT>, Page<RESULT>> toPage(Pageable pageable, long numberOfItems) {
         return Collector.of(
                 // start with a new list
                 ArrayList::new,
@@ -160,7 +162,17 @@ public class Pager {
                     return left;
                 },
                 // finalize the collection by passing the list to a new PageImpl.
-                PageImpl::new
+                (results) -> new PageImpl<>(results, pageable, numberOfItems)
         );
+    }
+
+    /**
+     *
+     * @param page to stream the contents of
+     * @param <ANY> the generic type of the page
+     * @return a stream of the page
+     */
+    private <ANY> Stream<ANY> streamOf(Page<ANY> page){
+        return StreamSupport.stream(page.spliterator(), false);
     }
 }
