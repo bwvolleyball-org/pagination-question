@@ -1,12 +1,21 @@
 package com.erwolff.pagination;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.BinaryOperator;
 import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import com.google.common.collect.Iterators;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.*;
+
+import static java.util.stream.Collectors.toList;
 
 /**
  * Provides helper utilities for paging results from the DB
@@ -104,9 +113,11 @@ public class Pager {
                                                                    Sort.Order sort) {
         // check if the initialResults page is already full
         if (isFullPage(initialResults)) {
-            StreamSupport.stream(initialResults.spliterator(), false).map(initialMappingFunction)
-            // TODO: initial results contained a full page, what should we do?
-            return null;
+            // apply the conversion and return a new page with the results.
+            return StreamSupport.stream(initialResults.spliterator(), false)
+                    .map(initialMappingFunction)
+                    .collect(toPage());
+            // COMPLETED HINT: initial results contained a full page, what should we do?
         }
 
         // TODO: check if all total results reside in the secondary collection - then we can short-circuit and return the results immediately
@@ -131,5 +142,25 @@ public class Pager {
         // case of size = 0 is illegal and will not happen, so page size is > 0
         // ensure page has content & the size is equivalent to the number of elements.
         return page.hasContent() && (page.getSize() == page.getNumberOfElements());
+    }
+
+    /**
+     * @param <RESULT> a generic type, can be anything, intended to be used on 'RESULT' types.
+     * @return a {@link Page<RESULT>} from the stream termination.
+     */
+    private <RESULT> Collector<RESULT, List<RESULT>, Page<RESULT>> toPage() {
+        return Collector.of(
+                // start with a new list
+                ArrayList::new,
+                // add new items into this list
+                List::add,
+                // if we end up with multiple lists (parallel streams), add everything to the (arbitrary) left list
+                (left, right) -> {
+                    left.addAll(right);
+                    return left;
+                },
+                // finalize the collection by passing the list to a new PageImpl.
+                PageImpl::new
+        );
     }
 }
