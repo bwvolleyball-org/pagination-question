@@ -8,7 +8,9 @@ import java.util.stream.Collector;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import com.erwolff.data.Timestamped;
 import com.google.common.collect.Iterators;
+import org.apache.commons.collections4.comparators.ComparatorChain;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.*;
@@ -33,7 +35,7 @@ public class Pager {
      * @param pageable                - the page request
      * @return - an org.springframework.data.Page of type RESULT
      */
-    public <LIVE, ARCHIVED, RESULT> Page<RESULT> pageAndMerge(Function<Pageable, Page<LIVE>> liveQuery,
+    public <LIVE extends Timestamped, ARCHIVED extends Timestamped, RESULT> Page<RESULT> pageAndMerge(Function<Pageable, Page<LIVE>> liveQuery,
                                                               Function<LIVE, RESULT> liveMappingFunction,
                                                               Function<Pageable, Page<ARCHIVED>> archivedQuery,
                                                               Function<ARCHIVED, RESULT> archivedMappingFunction,
@@ -99,7 +101,7 @@ public class Pager {
      * @param sort                     - the sort field and direction
      * @return - an org.springframework.data.Page of type RESULT
      */
-    private <RESULT, INITIAL, SECONDARY> Page<RESULT> pageAndMerge(Page<INITIAL> initialResults,
+    private <RESULT, INITIAL extends Timestamped, SECONDARY extends Timestamped> Page<RESULT> pageAndMerge(Page<INITIAL> initialResults,
                                                                    Function<INITIAL, RESULT> initialMappingFunction,
                                                                    Page<SECONDARY> secondaryResults,
                                                                    Function<Pageable, Page<SECONDARY>> secondaryQuery,
@@ -110,20 +112,16 @@ public class Pager {
         // check if the initialResults page is already full
         if (isFullPage(initialResults)) {
             // apply the conversion and return a new page with the results.
-            return streamOf(initialResults)
-                    .map(initialMappingFunction)
-                    .collect(toPage(pageable, totalElements));
+            return binaryResult(initialResults, initialMappingFunction, pageable, totalElements, sort);
             // COMPLETED HINT: initial results contained a full page, what should we do?
         }
 
         // COMPLETED HINT: check if all total results reside in the secondary collection - then we can short-circuit and return the results immediately
         // if the initial results have no elements, everything is in the secondary results.
         if (initialResults.getNumberOfElements() == 0){
-            return streamOf(secondaryResults)
-                    .map(secondaryMappingFunction)
-                    .collect(toPage(pageable, totalElements));
+            return binaryResult(secondaryResults, secondaryMappingFunction, pageable, totalElements, sort);
         }
-        
+
         //TODO: The rest is up to you! Some things to consider:
         // Remember, we have the FULL results of the query from both collections - we need to whittle down those results to the correct results to be returned.
         // Maybe keep track of total size vs the remaining size needed to fill out the results page.
@@ -174,5 +172,15 @@ public class Pager {
      */
     private <ANY> Stream<ANY> streamOf(Page<ANY> page){
         return StreamSupport.stream(page.spliterator(), false);
+    }
+
+    private <ANY extends Timestamped,RESULT> Page<RESULT> binaryResult(Page<ANY> anyResults, Function<ANY, RESULT> mappingFunction, Pageable pageable, long numberOfItems, Sort.Order sort){
+        Comparator<ANY> comparator = comparator(sort);
+            return streamOf(anyResults).sorted(comparator).map(mappingFunction).collect(toPage(pageable, numberOfItems));
+    }
+
+    private <ANY extends Timestamped> Comparator<ANY> comparator(Sort.Order sort){
+        Comparator<ANY> comparator = Comparator.comparingLong(Timestamped::getTimestamp);
+        return new ComparatorChain<>(comparator, sort.isAscending());
     }
 }
