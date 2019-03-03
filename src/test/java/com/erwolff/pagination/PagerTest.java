@@ -387,7 +387,10 @@ public class PagerTest {
     private Function<Pageable, Page<LiveDrive>> liveQuery = new Function<Pageable, Page<LiveDrive>>() {
         @Override
         public Page<LiveDrive> apply(Pageable pageable) {
-            int startingElement = pageable.getPageNumber() == 0 ? 0 : (pageable.getPageNumber() * pageable.getPageSize());
+            /** based on the findings in {@link org.springframework.data.mongodb.repository.query.AbstractMongoQuery#execute},
+             *  the offset of the {@link Pageable} should be used exclusively to determine the starting point.
+             *  The default implementation is what was here, however a specialized Pageable with an offset adjust proves invaluable for performance tweaks*/
+            int startingElement = pageable.getOffset();
             int endingElement = startingElement + (pageable.getPageSize() - 1);
             log.debug("LIVE: startingElement: {}  endingElement: {}  liveDrives.size(): {}", startingElement, endingElement, liveDrives.size());
             if (liveDrives.size() >= (endingElement + 1)) {
@@ -403,7 +406,10 @@ public class PagerTest {
     private Function<Pageable, Page<ArchivedDrive>> archivedQuery = new Function<Pageable, Page<ArchivedDrive>>() {
         @Override
         public Page<ArchivedDrive> apply(Pageable pageable) {
-            int startingElement = pageable.getPageNumber() == 0 ? 0 : (pageable.getPageNumber() * pageable.getPageSize());
+            /** based on the findings in {@link org.springframework.data.mongodb.repository.query.AbstractMongoQuery#execute},
+             *  the offset of the {@link Pageable} should be used exclusively to determine the starting point.
+             *  The default implementation is what was here, however a specialized Pageable with an offset adjust proves invaluable for performance tweaks*/
+            int startingElement = pageable.getOffset();
             int endingElement = startingElement + (pageable.getPageSize() - 1);
             log.debug("ARCHIVED: startingElement: {}  endingElement: {}  archivedDrives.size(): {}", startingElement, endingElement, archivedDrives.size());
             if (archivedDrives.size() >= (endingElement + 1)) {
