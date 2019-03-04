@@ -385,7 +385,9 @@ public class PagerTest {
     private Function<Pageable, Page<LiveDrive>> liveQuery = new Function<Pageable, Page<LiveDrive>>() {
         @Override
         public Page<LiveDrive> apply(Pageable pageable) {
-            /** based on the findings in {@link org.springframework.data.mongodb.repository.query.AbstractMongoQuery#execute},
+            /** based on the findings in
+             * {@link org.springframework.data.mongodb.core.query.Query#with(Pageable)} and
+             * {@link org.springframework.data.mongodb.repository.support.QueryDslMongoRepository#applyPagination(com.mysema.query.mongodb.MongodbQuery<T>, org.springframework.data.domain.Pageable)} ,
              *  the offset of the {@link Pageable} should be used exclusively to determine the starting point.
              *  The default implementation is what was here, however a specialized Pageable with an offset adjust proves invaluable for performance tweaks*/
             int startingElement = pageable.getOffset();
@@ -404,7 +406,9 @@ public class PagerTest {
     private Function<Pageable, Page<ArchivedDrive>> archivedQuery = new Function<Pageable, Page<ArchivedDrive>>() {
         @Override
         public Page<ArchivedDrive> apply(Pageable pageable) {
-            /** based on the findings in {@link org.springframework.data.mongodb.repository.query.AbstractMongoQuery#execute},
+            /** based on the findings in
+             * {@link org.springframework.data.mongodb.core.query.Query#with(Pageable)} and
+             * {@link org.springframework.data.mongodb.repository.support.QueryDslMongoRepository#applyPagination(com.mysema.query.mongodb.MongodbQuery<T>, org.springframework.data.domain.Pageable)} ,
              *  the offset of the {@link Pageable} should be used exclusively to determine the starting point.
              *  The default implementation is what was here, however a specialized Pageable with an offset adjust proves invaluable for performance tweaks*/
             int startingElement = pageable.getOffset();
