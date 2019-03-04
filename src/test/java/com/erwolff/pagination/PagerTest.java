@@ -1167,4 +1167,79 @@ public class PagerTest {
                 {Math.abs(random.nextInt(100) + 1), Math.abs(random.nextInt(900) + 1), Math.abs(random.nextInt(100) + 1)}
         };
     }
+
+    @Test(description = "paging and merging with mixed drive types to verify we can page forwards and backwards")
+    public void test_pageAndMerge_mixedDrives_forwardAndBackwardPaging(){
+        final int pageSize = 5;
+        final int numLiveDrives = 8;
+        final int numArchivedDrives = 7;
+
+        log.debug("pageSize: {}", pageSize);
+        PageRequest pageRequest = new PageRequest(0, pageSize, Sort.Direction.DESC, "timestamp");
+        liveDrives = generateLiveDrives(pageRequest, numLiveDrives);
+        archivedDrives = generateArchivedDrives(pageRequest, numArchivedDrives);
+
+        // first request, all live
+        Page<LiveDrive> results = pager.pageAndMerge(liveQuery,
+                ld -> ld,
+                archivedQuery,
+                ad -> Translator.translate(ad).orElse(null),
+                pageRequest);
+
+        assertThat(results).isNotNull();
+        verifyAllLive(results.getContent());
+
+        assertThat(results.hasNext()).isTrue();
+
+        results = pager.pageAndMerge(liveQuery,
+                ld -> ld,
+                archivedQuery,
+                ad -> Translator.translate(ad).orElse(null),
+                results.nextPageable());
+
+        List<LiveDrive> mixedContent = results.getContent();
+        verifyAllLive(mixedContent.subList(0, 3));
+        verifyAllArchived(mixedContent.subList(3, 5));
+
+        assertThat(results.hasNext()).isTrue();
+
+        results = pager.pageAndMerge(liveQuery,
+                ld -> ld,
+                archivedQuery,
+                ad -> Translator.translate(ad).orElse(null),
+                results.nextPageable());
+
+        assertThat(results.hasNext()).isFalse();
+        assertThat(results.hasPrevious()).isTrue();
+        assertThat(results.isLast()).isTrue();
+
+        verifyAllArchived(results.getContent());
+
+        // go back a page to the mixed results
+        results = pager.pageAndMerge(liveQuery,
+                ld -> ld,
+                archivedQuery,
+                ad -> Translator.translate(ad).orElse(null),
+                results.previousPageable());
+
+        mixedContent = results.getContent();
+        verifyAllLive(mixedContent.subList(0, 3));
+        verifyAllArchived(mixedContent.subList(3, 5));
+
+        assertThat(results.hasNext()).isTrue();
+        assertThat(results.hasPrevious()).isTrue();
+
+
+        results = pager.pageAndMerge(liveQuery,
+                ld -> ld,
+                archivedQuery,
+                ad -> Translator.translate(ad).orElse(null),
+                results.previousPageable());
+
+        verifyAllLive(results.getContent());
+
+        assertThat(results.hasNext()).isTrue();
+        assertThat(results.hasPrevious()).isFalse();
+        assertThat(results.isFirst()).isTrue();
+    }
 }

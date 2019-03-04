@@ -113,7 +113,7 @@ public class Pager {
             return binaryResult(secondaryResults, secondaryMappingFunction);
         } else {
             // results are not of one type exclusively, so we'll need to merge as we go.
-            return dualResult(initialResults, initialMappingFunction,secondaryResults, secondaryMappingFunction, secondaryQuery, pageable, totalElements, sort);
+            return dualResult(initialResults, initialMappingFunction, secondaryMappingFunction, secondaryQuery, pageable, totalElements, sort);
         }
     }
 
@@ -150,7 +150,6 @@ public class Pager {
      */
     private <INITIAL, SECONDARY, RESULT> Page<RESULT> dualResult(Page<INITIAL> initialResults,
                                                                  Function<INITIAL, RESULT> initialMappingFunction,
-                                                                 Page<SECONDARY> secondaryResults,
                                                                  Function<SECONDARY, RESULT> secondaryMappingFunction,
                                                                  Function<Pageable, Page<SECONDARY>> secondaryQuery,
                                                                  Pageable pageable,
@@ -186,8 +185,8 @@ public class Pager {
             // return our merged results in a page.
             return new PageImpl<>(resultsList, pageable, numberOfItems);
         } else {
-            // calculate the offset which is the number of items on the partial page of initial results
-            // these were accounted for in the page of mixed results.
+            // calculate the offset which is the number of secondary items on the page of mixed results
+            // that many secondary items were accounted for in the page of mixed results.
             // we then take the positive difference of page size - the number of items accounted for in the merged page
             // after we calculate our page size, we ensure it's less than the page size by modding it again by pageSize.
             int offset = (pageSize - Math.toIntExact(initialResults.getTotalElements() % pageSize)) % pageSize;
