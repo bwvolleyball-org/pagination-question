@@ -164,8 +164,8 @@ public class Pager {
         // 2) we are on a page of merged initial results & secondary results
         // 3) we are on a page of only secondary results of which we need to throw away results that were on the merged page
         if (isFullPage(initialResults)) {
-            // convert and return this page
-            return initialResults.map(initialMappingFunction::apply);
+            // convert and return this page taking into account that that we have a merged count.
+            return new PageImpl<>(initialResults.map(initialMappingFunction::apply).getContent(), pageable, numberOfItems);
         } else if (initialResults.getNumberOfElements() != 0) {
 
             // Take the initial results, map to results, get the content,
@@ -185,12 +185,12 @@ public class Pager {
 
             // return our merged results in a page.
             return new PageImpl<>(resultsList, pageable, numberOfItems);
-
         } else {
             // calculate the offset which is the number of items on the partial page of initial results
             // these were accounted for in the page of mixed results.
             // we then take the positive difference of page size - the number of items accounted for in the merged page
-            int offset = pageSize - Math.toIntExact(initialResults.getTotalElements() % pageSize);
+            // after we calculate our page size, we ensure it's less than the page size by modding it again by pageSize.
+            int offset = (pageSize - Math.toIntExact(initialResults.getTotalElements() % pageSize)) % pageSize;
             // calculate the page number we need to be on for this request by getting the page of the secondary results,
             // and subtracting the total number of pages in the first set of results
             int pageNumber = pageable.getPageNumber() - initialResults.getTotalPages();
